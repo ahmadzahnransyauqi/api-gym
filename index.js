@@ -11,7 +11,7 @@ app.use(cors({
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE"], // explicitly allow PATCH
   allowedHeaders: ["Content-Type", "Authorization"] // explicitly allow Authorization
 }));
-
+//test deploy
 // Middleware
 app.use(express.json());
 app.use("/uploads", express.static("uploads"));
