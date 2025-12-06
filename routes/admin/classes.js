@@ -43,8 +43,8 @@ router.post("/", async (req, res) => {
 
     await pool.query(
       `INSERT INTO class_schedules 
-       (class_name, trainer_name, day_of_week, start_time, end_time, spots, total_spots, difficulty, categories) 
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        (class_name, trainer_name, day_of_week, start_time, end_time, spots, total_spots, difficulty, categories) 
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
       [
         class_name,
         trainer_name,
@@ -91,16 +91,16 @@ router.put("/:id", async (req, res) => {
 
     await pool.query(
       `UPDATE class_schedules
-       SET class_name=$1,
-           trainer_name=$2,
-           day_of_week=$3,
-           start_time=$4,
-           end_time=$5,
-           spots=$6,
-           total_spots=$7,
-           difficulty=$8,
-           categories=$9
-       WHERE id=$10`,
+        SET class_name=$1,
+            trainer_name=$2,
+            day_of_week=$3,
+            start_time=$4,
+            end_time=$5,
+            spots=$6,
+            total_spots=$7,
+            difficulty=$8,
+            categories=$9
+        WHERE id=$10`,
       [
         class_name ?? existing.class_name,
         trainer_name ?? existing.trainer_name,
@@ -186,22 +186,19 @@ router.patch("/:id/join", middlewareAuth, async (req, res) => {
     if (!rows[0]) return res.status(404).json({ error: "Class not found" });
     const cls = rows[0];
 
-    // Check capacity
-    if (cls.spots >= cls.total_spots)
+    // FIX 1: Perbaiki logika capacity check. Kuota habis jika spots <= 0
+    if (cls.spots <= 0) 
       return res.status(400).json({ error: "Class is full" });
 
-    // Increase spots
-    await pool.query(
-      "UPDATE class_schedules SET spots = spots + 1 WHERE id=$1",
-      [classId]
-    );
+    // HILANGKAN UPDATE MANUAL: 
+    // Trigger trg_join_class (AFTER INSERT) akan otomatis mengurangi spots - 1.
 
     // Insert user schedule with full details
     await pool.query(
       `INSERT INTO user_schedules 
-        (user_id, class_schedule_id, day_of_week, start_time, end_time, difficulty, categories, created_at)
-       VALUES 
-        ($1, $2, $3, $4, $5, $6, $7, NOW())`,
+         (user_id, class_schedule_id, day_of_week, start_time, end_time, difficulty, categories, created_at)
+         VALUES 
+         ($1, $2, $3, $4, $5, $6, $7, NOW())`,
       [
         user_id,
         classId,
@@ -225,14 +222,14 @@ router.patch("/:id/leave", middlewareAuth, async (req, res) => {
     const classId = req.params.id;
     const user_id = req.user.id;
 
-    // 1. Get class schedule
+    // 1. Get class schedule (diperlukan untuk error handling)
     const { rows } = await pool.query(
       "SELECT * FROM class_schedules WHERE id=$1",
       [classId]
     );
 
     if (!rows[0]) return res.status(404).json({ error: "Class not found" });
-    const cls = rows[0];
+    // const cls = rows[0]; // Data ini tidak digunakan lagi selain untuk cek not found
 
     // 2. Check if user is actually joined
     const joined = await pool.query(
@@ -244,18 +241,11 @@ router.patch("/:id/leave", middlewareAuth, async (req, res) => {
       return res.status(400).json({ error: "You are not joined in this class" });
     }
 
-    // 3. Check if spots can be decremented
-    if (cls.spots <= 0) {
-      return res.status(400).json({ error: "Cannot leave, no spots to remove" });
-    }
+    // FIX 2: HILANGKAN check kuota yang tidak relevan.
+    // HILANGKAN UPDATE MANUAL: 
+    // Trigger trg_leave_class (AFTER DELETE) akan otomatis menambah spots + 1.
 
-    // 4. Decrease spots
-    await pool.query(
-      "UPDATE class_schedules SET spots = spots - 1 WHERE id=$1",
-      [classId]
-    );
-
-    // 5. Remove from user schedule
+    // 3. Remove from user schedule (Trigger trg_leave_class akan berjalan di sini)
     await pool.query(
       "DELETE FROM user_schedules WHERE user_id=$1 AND class_schedule_id=$2",
       [user_id, classId]

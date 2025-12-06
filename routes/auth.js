@@ -55,14 +55,14 @@ router.post("/login", async (req, res) => {
       [loginId]
     );
     if (userResult.rows.length === 0) {
-      return res.status(400).json({ error: "Username tidak ditemukan" });
+      return res.status(400).json({ error: "Username not found" });
     }
 
     const user = userResult.rows[0];
 
     const validPassword = await bcrypt.compare(password, user.password);
     if (!validPassword) {
-      return res.status(400).json({ error: "Password salah!" });
+      return res.status(400).json({ error: "Password incorrect" });
     }
 
     const token = jwt.sign(
