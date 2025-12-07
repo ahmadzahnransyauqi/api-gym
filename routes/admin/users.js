@@ -8,12 +8,29 @@ const logActivity = async (msg) => {
 };
 
 // GET USERS
+// GET USERS (fixed to avoid duplicate IDs)
 router.get('/', async (req, res) => {
-  const q = `SELECT u.id, u.username, u.full_name, u.email, COALESCE(um.status, 'inactive') as status 
-             FROM users u LEFT JOIN user_memberships um ON u.id = um.user_id 
-             WHERE u.role = 'member' ORDER BY u.created_at DESC`;
-  const { rows } = await pool.query(q);
-  res.json(rows);
+  try {
+    const q = `
+      SELECT u.id, u.username, u.full_name, u.email,
+             COALESCE(um.status, 'inactive') AS status
+      FROM users u
+      LEFT JOIN LATERAL (
+          SELECT status
+          FROM user_memberships
+          WHERE user_id = u.id
+          ORDER BY created_at DESC
+          LIMIT 1
+      ) um ON true
+      WHERE u.role = 'member'
+      ORDER BY u.created_at DESC
+    `;
+    const { rows } = await pool.query(q);
+    res.json(rows);
+  } catch (e) {
+    console.error(e);
+    res.status(500).send(e);
+  }
 });
 
 // CREATE USER
